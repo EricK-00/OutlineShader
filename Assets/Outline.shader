@@ -30,6 +30,10 @@ Shader "Hidden/Roystan/Outline Post Process"
 			float _DepthThreshold;
 			float _NormalThreshold;
 			float4x4 _ClipToView;
+			float _DepthNormalThreshold;
+			float _DepthNormalThresholdScale;
+
+			float4 _Color;
 
 			// Combines the top and bottom colors using normal blending.
 			// https://en.wikipedia.org/wiki/Blend_modes#Normal_blend_mode
@@ -93,9 +97,6 @@ Shader "Hidden/Roystan/Outline Post Process"
 
 				float edgeDepth = sqrt(pow(depthFiniteDifference0, 2) + pow(depthFiniteDifference1, 2)) * 100;
 
-				float depthThreshold = _DepthThreshold * depth0;
-				edgeDepth = edgeDepth > depthThreshold ? 1 : 0;
-
 				//return edgeDepth;
 
 				float3 normal0 = SAMPLE_TEXTURE2D(_CameraNormalsTexture, sampler_CameraNormalsTexture, bottomLeftUV).rgb;
@@ -108,18 +109,24 @@ Shader "Hidden/Roystan/Outline Post Process"
 
 				float edgeNormal = sqrt(dot(normalFiniteDifference0, normalFiniteDifference0) + dot(normalFiniteDifference1, normalFiniteDifference1));
 
-				edgeNormal = edgeNormal > _NormalThreshold ? 1 : 0;
-
-				float edge = max(edgeDepth, edgeNormal);
-				//return edge;
-
 				float3 viewNormal = normal0 * 2 - 1;
 				float NdotV = 1 - dot(viewNormal, -i.viewSpaceDir);
 
-				return NdotV;
+				float normalThreshold01 = saturate((NdotV - _DepthNormalThreshold) / (1 - _DepthNormalThreshold));
+				float normalThreshold = normalThreshold01 * _DepthNormalThresholdScale + 1;
 
-				//float4 color = SAMPLE_TEXTURE2D(_CameraNormalsTexture, sampler_CameraNormalsTexture, i.texcoord);
-				//float4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
+				float depthThreshold = _DepthThreshold * depth0 * normalThreshold;
+				edgeDepth = edgeDepth > depthThreshold ? 1 : 0;
+
+				edgeNormal = edgeNormal > normalThreshold ? 1 : 0;
+
+				float edge = max(edgeDepth, edgeNormal);
+
+				float4 edgeColor = float4(_Color.rgb, _Color.a * edge);
+
+				float4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
+
+				return alphaBlend(edgeColor,color);
 			}
 			ENDHLSL
 		}
